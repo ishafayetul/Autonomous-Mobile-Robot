@@ -1,0 +1,41 @@
+<launch>
+  <node name="serial_node" pkg="rosserial_python" type="serial_node.py" output="screen">
+      <rosparam file="$(find robot_bringup)/config/serial_params.yaml" command="load" />
+  </node>
+
+  <node pkg="robot_bringup" type="Mecanum_TF" name="Mecanum_TF" output="screen">
+    <rosparam file="$(find robot_bringup)/config/odom_encoder_params.yaml" command="load" />
+    <remap from="odom" to="/robot_velocity_controller/odom"/>
+  </node>
+
+  <include file="$(find rplidar_ros)/launch/rplidar.launch" />
+  <node pkg="tf" type="static_transform_publisher" name="base_to_laser_broadcaster" args="0.08 0.06 .21 0 0 0 robot_footprint laser 40" />
+
+
+  <node name="Cmd_Vel_to_Arduino" pkg="robot_bringup" type="Cmd_Vel_to_Arduino" respawn="false" output="screen"/>
+     
+  <include file="$(find imu_test)/launch/imu.launch" />
+  <include file="$(find imu_filter_madgwick)/launch/imu_filter_madgwick_withoutmag.launch" />
+
+  <node pkg="tf" type="static_transform_publisher" name="imu_broadcaster" args="0.105 0.105 0.12 0 0 0 robot_footprint imu_link 40"/>
+
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization" clear_params="true">
+    <rosparam command="load" file="$(find robot_bringup)/config/robot_localization_ekf.yaml"/>
+    <!--remap from="odometry/filtered" to="odom"/-->
+    <remap from="odometry/filtered" to="odometry/filtered"/>
+  </node>
+
+		<!-- Start Google Cartographer node with custom configuration file-->
+    <node name="cartographer_node" pkg="cartographer_ros" type="cartographer_node" args="
+          -configuration_directory
+              $(find gbot_core)/configuration_files
+          -configuration_basename gbot_lidar_2d.lua" output="screen">
+          <remap from="scan_1" to="/scan" />
+          <remap from="odom" to ="odom"/>
+          
+    </node>
+
+		<!-- Additional node which converts Cartographer map into ROS occupancy grid map. Not used and can be skipped in this case -->
+    <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros" type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+    
+</launch>
